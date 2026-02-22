@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>注册审批 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>注册审批</h1>
+        <p>
+          当前用户：<strong th:text="${displayName}">Admin</strong>（<span
+            th:text="${username}"
+            >admin</span
+          >）
+        </p>
+      </div>
+      <div>
+        <a th:href="@{/dashboard}" class="btn-small">返回首页</a>
+        <form method="post" th:action="@{/logout}" style="display: inline">
+          <button type="submit" class="logout-btn">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content-container">
+      <h2>待审批注册申请</h2>
+      <table id="registrationTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>用户名</th>
+            <th>显示名</th>
+            <th>邮箱</th>
+            <th>申请角色</th>
+            <th>提交时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </main>
+
+    <script>
+      function fmt(dt) {
+        return new Date(dt).toLocaleString('zh-CN');
+      }
+
+      async function loadPending() {
+        const response = await fetch('/api/admin/registrations/pending');
+        if (!response.ok) {
+          alert('加载待审批注册失败');
+          return;
+        }
+
+        const rows = await response.json();
+        const tbody = document.querySelector('#registrationTable tbody');
+        tbody.innerHTML = '';
+
+        if (rows.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" style="text-align:center">暂无待审批申请</td></tr>';
+          return;
+        }
+
+        rows.forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.id}</td>
+            <td>${item.username}</td>
+            <td>${item.displayName}</td>
+            <td>${item.email}</td>
+            <td>${item.requestedRole}</td>
+            <td>${fmt(item.createdAt)}</td>
+            <td>
+              <button class="btn-primary" onclick="approve(${item.id})">批准</button>
+              <button class="btn-secondary" onclick="reject(${item.id})">拒绝</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function approve(id) {
+        const comment = prompt('审批意见（可选）', '');
+        const response = await fetch(`/api/admin/registrations/${id}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment: comment || null }),
+        });
+
+        if (!response.ok) {
+          alert('批准失败');
+          return;
+        }
+
+        loadPending();
+      }
+
+      async function reject(id) {
+        const comment = prompt('拒绝原因（可选）', '');
+        const response = await fetch(`/api/admin/registrations/${id}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment: comment || null }),
+        });
+
+        if (!response.ok) {
+          alert('拒绝失败');
+          return;
+        }
+
+        loadPending();
+      }
+
+      loadPending();
+    </script>
+  </body>
+</html>

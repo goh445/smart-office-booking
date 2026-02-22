@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Office Booking - Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Smart Office Booking</h1>
+        <p>
+          欢迎，<strong th:text="${displayName}">User</strong>（<span
+            th:text="${username}"
+            >username</span
+          >）
+        </p>
+        <p>角色：<span th:text="${roles}">[EMPLOYEE]</span></p>
+      </div>
+      <form method="post" th:action="@{/logout}">
+        <button type="submit">退出登录</button>
+      </form>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>功能导航</h2>
+        <div style="display: flex; gap: 15px; margin: 20px 0">
+          <a th:href="@{/bookings/create}" class="btn-primary">创建预订</a>
+          <a th:href="@{/bookings}" class="btn-primary">我的预订</a>
+          <a th:href="@{/ai}" class="btn-primary">AI 助手</a>
+          <a
+            th:if="${roles.contains('APPROVER') or roles.contains('ADMIN')}"
+            th:href="@{/approvals}"
+            class="btn-primary"
+            >审批队列</a
+          >
+          <a
+            th:if="${roles.contains('ADMIN')}"
+            th:href="@{/admin/registrations}"
+            class="btn-primary"
+            >注册审批</a
+          >
+        </div>
+      </section>
+
+      <div id="movablePanelsContainer">
+        <section
+          class="card movable-panel panel-size-full"
+          id="managementAnalyticsSection"
+          data-panel-id="analytics"
+          th:if="${roles.contains('APPROVER') or roles.contains('ADMIN')}"
+        >
+          <div class="panel-header">
+            <h2>统计与分析（管理价值）</h2>
+            <div class="panel-move-controls">
+              <button
+                type="button"
+                class="panel-drag-btn"
+                draggable="false"
+                title="拖动排序"
+                aria-label="拖动排序"
+              >
+                ⠿
+              </button>
+            </div>
+          </div>
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(4, minmax(120px, 1fr));
+              gap: 10px;
+              align-items: end;
+              margin-bottom: 12px;
+            "
+          >
+            <label>
+              开始日期
+              <input id="analyticsStartDate" type="date" />
+            </label>
+            <label>
+              时间窗口
+              <select id="analyticsDays">
+                <option value="7">近 7 天</option>
+                <option value="14">近 14 天</option>
+              </select>
+            </label>
+            <div>
+              <button
+                type="button"
+                id="refreshAnalyticsBtn"
+                class="btn-primary"
+              >
+                刷新分析
+              </button>
+            </div>
+          </div>
+
+          <h3>资源利用率看板（楼层 × 时段）</h3>
+          <p id="utilizationMeta" style="margin: 6px 0 10px"></p>
+          <div style="overflow-x: auto">
+            <table id="utilizationTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <h3 style="margin-top: 18px">未来一周高峰期预警</h3>
+          <table id="peakAlertTable">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>星期</th>
+                <th>当前预约量</th>
+                <th>历史基线</th>
+                <th>预测热度</th>
+                <th>等级</th>
+                <th>建议</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section
+          class="card movable-panel panel-size-full"
+          id="resourceListSection"
+          data-panel-id="resources"
+        >
+          <div class="panel-header">
+            <h2>资源列表（直接展示）</h2>
+            <div class="panel-move-controls">
+              <button
+                type="button"
+                class="panel-drag-btn"
+                draggable="false"
+                title="拖动排序"
+                aria-label="拖动排序"
+              >
+                ⠿
+              </button>
+            </div>
+          </div>
+          <div
+            class="filter-section"
+            style="
+              display: grid;
+              grid-template-columns: repeat(6, minmax(120px, 1fr));
+              gap: 10px;
+              align-items: end;
+              margin-bottom: 16px;
+            "
+          >
+            <label>
+              资源类型
+              <select id="typeFilter">
+                <option value="">全部</option>
+                <option value="MEETING_ROOM">会议室</option>
+                <option value="DESK">工位</option>
+                <option value="OTHER">其他</option>
+              </select>
+            </label>
+
+            <label>
+              位置
+              <input
+                id="locationFilter"
+                type="text"
+                placeholder="如: Floor 5"
+              />
+            </label>
+
+            <label>
+              最小容量
+              <input
+                id="minCapacityFilter"
+                type="number"
+                min="1"
+                placeholder="1"
+              />
+            </label>
+
+            <label>
+              最大容量
+              <input
+                id="maxCapacityFilter"
+                type="number"
+                min="1"
+                placeholder="20"
+              />
+            </label>
+
+            <label style="grid-column: span 2">
+              搜索
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="按编号/名称/特性搜索"
+              />
+            </label>
+
+            <div style="display: flex; gap: 8px; grid-column: span 6">
+              <button type="button" id="applyFilterBtn" class="btn-primary">
+                筛选
+              </button>
+              <button type="button" id="resetFilterBtn" class="btn-secondary">
+                重置
+              </button>
+            </div>
+          </div>
+
+          <table id="resourceTable">
+            <thead>
+              <tr>
+                <th>编码</th>
+                <th>名称</th>
+                <th>类型</th>
+                <th>位置</th>
+                <th>容量</th>
+                <th>显示器</th>
+                <th>视频会议</th>
+                <th>特性</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-top: 16px;
+            "
+          >
+            <span id="pageInfo">第 1 页</span>
+            <div style="display: flex; gap: 8px">
+              <button type="button" id="prevPageBtn" class="btn-secondary">
+                上一页
+              </button>
+              <button type="button" id="nextPageBtn" class="btn-secondary">
+                下一页
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const typeLabels = {
+        MEETING_ROOM: '会议室',
+        DESK: '工位',
+        OTHER: '其他',
+      };
+
+      const pageSize = 10;
+      let currentPage = 0;
+      let totalPages = 1;
+
+      function todayDateString() {
+        return new Date().toISOString().split('T')[0];
+      }
+
+      async function loadResources(page = 0) {
+        try {
+          const type = document.getElementById('typeFilter').value;
+          const location = document.getElementById('locationFilter').value;
+          const minCapacity =
+            document.getElementById('minCapacityFilter').value;
+          const maxCapacity =
+            document.getElementById('maxCapacityFilter').value;
+          const search = document.getElementById('searchInput').value;
+
+          const params = new URLSearchParams();
+          params.set('page', page);
+          params.set('size', pageSize);
+          if (type) params.set('type', type);
+          if (location) params.set('location', location);
+          if (minCapacity) params.set('minCapacity', minCapacity);
+          if (maxCapacity) params.set('maxCapacity', maxCapacity);
+          if (search) params.set('search', search);
+
+          const response = await fetch(`/api/resources?${params.toString()}`);
+          if (response.ok) {
+            const data = await response.json();
+            currentPage = data.number;
+            totalPages = data.totalPages;
+            displayResources(data.content || []);
+            updatePagination();
+          } else {
+            alert('加载资源失败');
+          }
+        } catch (error) {
+          console.error('Error loading resources:', error);
+          alert('加载资源时发生错误');
+        }
+      }
+
+      function displayResources(resources) {
+        const tbody = document.querySelector('#resourceTable tbody');
+        tbody.innerHTML = '';
+
+        if (resources.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="9" style="text-align: center;">暂无资源</td></tr>';
+          return;
+        }
+
+        resources.forEach((resource) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${resource.code}</td>
+            <td>${resource.name}</td>
+            <td>${typeLabels[resource.type] || resource.type}</td>
+            <td>${resource.location || '-'}</td>
+            <td>${resource.capacity || '-'}</td>
+            <td>${resource.hasDisplay ? '是' : '否'}</td>
+            <td>${resource.hasVideoConference ? '是' : '否'}</td>
+            <td>${resource.features || '-'}</td>
+            <td><a href="/bookings/create?resourceId=${resource.id}" class="btn-small">预订</a></td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+
+      function updatePagination() {
+        const info = document.getElementById('pageInfo');
+        const prevBtn = document.getElementById('prevPageBtn');
+        const nextBtn = document.getElementById('nextPageBtn');
+
+        const displayTotalPages = totalPages === 0 ? 1 : totalPages;
+        info.textContent = `第 ${currentPage + 1} 页 / 共 ${displayTotalPages} 页`;
+        prevBtn.disabled = currentPage <= 0;
+        nextBtn.disabled = currentPage >= totalPages - 1 || totalPages === 0;
+      }
+
+      function applyFilters() {
+        loadResources(0);
+      }
+
+      function resetFilters() {
+        document.getElementById('typeFilter').value = '';
+        document.getElementById('locationFilter').value = '';
+        document.getElementById('minCapacityFilter').value = '';
+        document.getElementById('maxCapacityFilter').value = '';
+        document.getElementById('searchInput').value = '';
+        loadResources(0);
+      }
+
+      async function loadUtilization() {
+        const startDate = document.getElementById('analyticsStartDate').value;
+        const days = document.getElementById('analyticsDays').value;
+
+        const params = new URLSearchParams();
+        if (startDate) params.set('startDate', startDate);
+        params.set('days', days || '7');
+
+        const response = await fetch(
+          `/api/analytics/utilization?${params.toString()}`,
+        );
+        if (!response.ok) {
+          throw new Error('加载利用率看板失败');
+        }
+
+        const data = await response.json();
+        renderUtilization(data);
+      }
+
+      function renderUtilization(data) {
+        const meta = document.getElementById('utilizationMeta');
+        const thead = document.querySelector('#utilizationTable thead');
+        const tbody = document.querySelector('#utilizationTable tbody');
+        meta.textContent = `统计窗口：${data.windowStartDate} 至 ${data.windowEndDate}`;
+
+        if (!data.floors || data.floors.length === 0) {
+          thead.innerHTML = '';
+          tbody.innerHTML =
+            '<tr><td style="text-align:center;">当前窗口暂无可视化数据</td></tr>';
+          return;
+        }
+
+        const hours = data.hours || [];
+        const cellMap = {};
+        (data.heatmap || []).forEach((cell) => {
+          cellMap[`${cell.floor}|${cell.hour}`] = cell.bookingCount;
+        });
+
+        let headHtml = '<tr><th>楼层</th>';
+        hours.forEach((hour) => {
+          headHtml += `<th>${String(hour).padStart(2, '0')}:00</th>`;
+        });
+        headHtml += '</tr>';
+        thead.innerHTML = headHtml;
+
+        let bodyHtml = '';
+        data.floors.forEach((floor) => {
+          bodyHtml += `<tr><td>${floor}</td>`;
+          hours.forEach((hour) => {
+            const count = cellMap[`${floor}|${hour}`] || 0;
+            const bar = count > 0 ? '█'.repeat(Math.min(count, 6)) : '-';
+            bodyHtml += `<td title="${count} 个预约">${bar} ${count}</td>`;
+          });
+          bodyHtml += '</tr>';
+        });
+        tbody.innerHTML = bodyHtml;
+      }
+
+      async function loadPeakAlert() {
+        const startDate = document.getElementById('analyticsStartDate').value;
+        const params = new URLSearchParams();
+        if (startDate) params.set('startDate', startDate);
+
+        const response = await fetch(
+          `/api/analytics/peak-alert?${params.toString()}`,
+        );
+        if (!response.ok) {
+          throw new Error('加载高峰预警失败');
+        }
+
+        const data = await response.json();
+        renderPeakAlert(data);
+      }
+
+      function renderPeakAlert(data) {
+        const tbody = document.querySelector('#peakAlertTable tbody');
+        const predictions = data.predictions || [];
+        if (predictions.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" style="text-align:center;">未来一周暂无数据</td></tr>';
+          return;
+        }
+
+        let html = '';
+        predictions.forEach((item) => {
+          const levelLabel =
+            item.level === 'HIGH'
+              ? '高'
+              : item.level === 'MEDIUM'
+                ? '中'
+                : '正常';
+          html += `
+            <tr>
+              <td>${item.date}</td>
+              <td>${item.dayOfWeek}</td>
+              <td>${item.existingBookings}</td>
+              <td>${item.historicalBaseline}</td>
+              <td>${item.predictedLoad}</td>
+              <td>${levelLabel}</td>
+              <td>${item.recommendation || '-'}</td>
+            </tr>
+          `;
+        });
+        tbody.innerHTML = html;
+      }
+
+      async function loadManagementAnalytics() {
+        const analyticsSection = document.getElementById(
+          'managementAnalyticsSection',
+        );
+        if (!analyticsSection) {
+          return;
+        }
+
+        try {
+          await Promise.all([loadUtilization(), loadPeakAlert()]);
+        } catch (error) {
+          console.error('Error loading analytics:', error);
+          alert(error.message || '加载分析数据失败');
+        }
+      }
+
+      function getMovablePanels() {
+        return Array.from(document.querySelectorAll('.movable-panel'));
+      }
+
+      const LAYOUT_PRESETS = {
+        single: { slotCount: 1, className: 'layout-mode-single' },
+        splitLR: { slotCount: 2, className: 'layout-mode-lr' },
+        leftMainRightSplit: { slotCount: 3, className: 'layout-mode-lrs' },
+        quadGrid: { slotCount: 4, className: 'layout-mode-quad' },
+      };
+
+      function getActiveLayoutMode() {
+        const container = document.getElementById('movablePanelsContainer');
+        if (!container) return 'splitLR';
+        return container.dataset.layoutMode || 'splitLR';
+      }
+
+      function getSlotMap() {
+        const map = {};
+        getMovablePanels().forEach((panel, index) => {
+          map[panel.dataset.panelId] = Number.parseInt(
+            panel.dataset.slot || `${index}`,
+            10,
+          );
+        });
+        return map;
+      }
+
+      function normalizeSlotMap(mode, map) {
+        const preset = LAYOUT_PRESETS[mode] || LAYOUT_PRESETS.splitLR;
+        const maxSlot = preset.slotCount - 1;
+        const used = new Set();
+        const normalized = {};
+        const panels = getMovablePanels();
+
+        panels.forEach((panel, index) => {
+          const panelId = panel.dataset.panelId;
+          let slot = Number.isInteger(map[panelId]) ? map[panelId] : index;
+          if (slot < 0 || slot > maxSlot || used.has(slot)) {
+            slot = -1;
+          }
+          if (slot === -1) {
+            for (let i = 0; i <= maxSlot; i++) {
+              if (!used.has(i)) {
+                slot = i;
+                break;
+              }
+            }
+          }
+          if (slot === -1) {
+            slot = maxSlot;
+          }
+          used.add(slot);
+          normalized[panelId] = slot;
+        });
+
+        return normalized;
+      }
+
+      function applyLayoutState(mode, map) {
+        const container = document.getElementById('movablePanelsContainer');
+        if (!container) return;
+
+        const preset = LAYOUT_PRESETS[mode] || LAYOUT_PRESETS.splitLR;
+        const normalizedMap = normalizeSlotMap(mode, map);
+
+        Object.values(LAYOUT_PRESETS).forEach((layout) => {
+          container.classList.remove(layout.className);
+        });
+
+        container.classList.add(preset.className);
+        container.dataset.layoutMode = mode;
+
+        getMovablePanels().forEach((panel, index) => {
+          const panelId = panel.dataset.panelId;
+          const slot = Number.isInteger(normalizedMap[panelId])
+            ? normalizedMap[panelId]
+            : index;
+          panel.dataset.slot = `${slot}`;
+        });
+      }
+
+      function saveLayoutState() {
+        const mode = getActiveLayoutMode();
+        localStorage.setItem('dashboard.layout.mode', mode);
+        localStorage.setItem(
+          'dashboard.layout.slots',
+          JSON.stringify(getSlotMap()),
+        );
+      }
+
+      function savePanelSizes() {
+        const sizes = {};
+        getMovablePanels().forEach((panel) => {
+          sizes[panel.dataset.panelId] = {
+            width: panel.style.width || '',
+            height: panel.style.height || '',
+          };
+        });
+        localStorage.setItem('dashboard.panel.sizes', JSON.stringify(sizes));
+      }
+
+      function clearPanelDraggable() {
+        getMovablePanels().forEach((panel) => {
+          panel.draggable = false;
+          panel.classList.remove('drag-ready');
+          panel.classList.remove('dragging');
+          panel.classList.remove('drag-ghost');
+        });
+      }
+
+      function restorePanelSizes() {
+        const raw = localStorage.getItem('dashboard.panel.sizes');
+        if (!raw) {
+          return;
+        }
+
+        let savedSizes = {};
+        try {
+          savedSizes = JSON.parse(raw);
+        } catch (_error) {
+          return;
+        }
+
+        getMovablePanels().forEach((panel) => {
+          const size = savedSizes[panel.dataset.panelId] || {};
+          panel.style.width = size.width || '';
+          panel.style.height = size.height || '';
+        });
+      }
+
+      function restoreLayoutState() {
+        const savedMode =
+          localStorage.getItem('dashboard.layout.mode') || 'splitLR';
+        let savedSlots = {};
+        try {
+          savedSlots = JSON.parse(
+            localStorage.getItem('dashboard.layout.slots') || '{}',
+          );
+        } catch (_error) {
+          savedSlots = {};
+        }
+
+        applyLayoutState(savedMode, savedSlots);
+      }
+
+      function ensureLayoutOverlay() {
+        let overlay = document.getElementById('layoutDragOverlay');
+        if (overlay) {
+          return overlay;
+        }
+
+        overlay = document.createElement('div');
+        overlay.id = 'layoutDragOverlay';
+        overlay.className = 'layout-overlay';
+        overlay.innerHTML = `
+          <div class="layout-overlay-panel">
+            <div class="layout-title">布局预览</div>
+            <div class="layout-mode-switch" id="layoutModeSwitch">
+              <div class="layout-choice layout-single" data-layout-mode="single" title="一个框">
+                <i class="layout-cell" data-layout-slot="0"></i>
+              </div>
+              <div class="layout-choice layout-split" data-layout-mode="splitLR" title="左右双框">
+                <i class="layout-cell" data-layout-slot="0"></i>
+                <i class="layout-cell" data-layout-slot="1"></i>
+              </div>
+              <div class="layout-choice layout-lrs" data-layout-mode="leftMainRightSplit" title="三分框">
+                <i class="layout-cell" data-layout-slot="0"></i>
+                <i class="layout-cell" data-layout-slot="1"></i>
+                <i class="layout-cell" data-layout-slot="2"></i>
+              </div>
+              <div class="layout-choice layout-quad" data-layout-mode="quadGrid" title="四分框">
+                <i class="layout-cell" data-layout-slot="0"></i>
+                <i class="layout-cell" data-layout-slot="1"></i>
+                <i class="layout-cell" data-layout-slot="2"></i>
+                <i class="layout-cell" data-layout-slot="3"></i>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(overlay);
+        return overlay;
+      }
+
+      function renderOverlaySlots(mode, activeSlot) {
+        const modeSwitch = document.getElementById('layoutModeSwitch');
+        if (!modeSwitch) return;
+
+        if (modeSwitch) {
+          modeSwitch.querySelectorAll('.layout-choice').forEach((choice) => {
+            const isActiveChoice = choice.dataset.layoutMode === mode;
+            choice.classList.toggle('active', isActiveChoice);
+            choice.querySelectorAll('.layout-cell').forEach((cell) => {
+              const slot = Number.parseInt(cell.dataset.layoutSlot || '-1', 10);
+              cell.classList.toggle(
+                'active',
+                isActiveChoice && slot === activeSlot,
+              );
+            });
+          });
+        }
+      }
+
+      function showLayoutOverlay(mode, activeSlot) {
+        const overlay = ensureLayoutOverlay();
+        overlay.classList.add('visible');
+        renderOverlaySlots(mode, activeSlot);
+      }
+
+      function hideLayoutOverlay() {
+        const overlay = document.getElementById('layoutDragOverlay');
+        if (overlay) {
+          overlay.classList.remove('visible');
+        }
+      }
+
+      function detectSlotFromPointer(mode, clientX, clientY) {
+        const container = document.getElementById('movablePanelsContainer');
+        if (!container) {
+          return 0;
+        }
+
+        const rect = container.getBoundingClientRect();
+        const xRatio = (clientX - rect.left) / Math.max(rect.width, 1);
+        const yRatio = (clientY - rect.top) / Math.max(rect.height, 1);
+
+        if (mode === 'splitLR') {
+          return xRatio < 0.5 ? 0 : 1;
+        }
+        if (mode === 'leftMainRightSplit') {
+          if (xRatio < 0.55) return 0;
+          return yRatio < 0.5 ? 1 : 2;
+        }
+        if (mode === 'quadGrid') {
+          const col = xRatio < 0.5 ? 0 : 1;
+          const row = yRatio < 0.5 ? 0 : 1;
+          return row * 2 + col;
+        }
+
+        return 0;
+      }
+
+      function detectOverlayChoice(clientX, clientY) {
+        const modeSwitch = document.getElementById('layoutModeSwitch');
+        if (!modeSwitch) {
+          return null;
+        }
+
+        const choices = Array.from(
+          modeSwitch.querySelectorAll('.layout-choice'),
+        );
+        for (const choice of choices) {
+          const choiceRect = choice.getBoundingClientRect();
+          const insideChoice =
+            clientX >= choiceRect.left &&
+            clientX <= choiceRect.right &&
+            clientY >= choiceRect.top &&
+            clientY <= choiceRect.bottom;
+
+          if (!insideChoice) {
+            continue;
+          }
+
+          let slot = 0;
+          const cells = Array.from(choice.querySelectorAll('.layout-cell'));
+          for (const cell of cells) {
+            const cellRect = cell.getBoundingClientRect();
+            const insideCell =
+              clientX >= cellRect.left &&
+              clientX <= cellRect.right &&
+              clientY >= cellRect.top &&
+              clientY <= cellRect.bottom;
+            if (insideCell) {
+              slot = Number.parseInt(cell.dataset.layoutSlot || '0', 10);
+              break;
+            }
+          }
+
+          return {
+            mode: choice.dataset.layoutMode || 'splitLR',
+            slot,
+          };
+        }
+
+        return null;
+      }
+
+      function createPreviewSlotMap(
+        baseMap,
+        draggingPanelId,
+        targetSlot,
+        mode,
+      ) {
+        const preset = LAYOUT_PRESETS[mode] || LAYOUT_PRESETS.splitLR;
+        const slotCount = preset.slotCount;
+        const nextMap = { ...baseMap };
+        nextMap[draggingPanelId] = targetSlot;
+
+        const occupied = new Set([targetSlot]);
+        getMovablePanels().forEach((panel) => {
+          const panelId = panel.dataset.panelId;
+          if (panelId === draggingPanelId) {
+            return;
+          }
+          let slot = Number.isInteger(nextMap[panelId]) ? nextMap[panelId] : 0;
+          if (slot < 0 || slot >= slotCount || occupied.has(slot)) {
+            slot = -1;
+          }
+          if (slot === -1) {
+            for (let i = 0; i < slotCount; i++) {
+              if (!occupied.has(i)) {
+                slot = i;
+                break;
+              }
+            }
+          }
+          if (slot === -1) {
+            slot = slotCount - 1;
+          }
+          nextMap[panelId] = slot;
+          occupied.add(slot);
+        });
+
+        return nextMap;
+      }
+
+      function bindPanelDragButtons() {
+        let draggingPanel = null;
+        let previewMode = null;
+        let previewSlot = 0;
+        let originState = null;
+        let dropped = false;
+        let pendingPointer = null;
+        let dragFrameScheduled = false;
+        let lastAppliedKey = '';
+
+        function setDragMode(active) {
+          document.body.classList.toggle('drag-mode', active);
+        }
+
+        function finalizeDrag() {
+          if (draggingPanel) {
+            draggingPanel.classList.remove('dragging');
+            draggingPanel.classList.remove('drag-ghost');
+          }
+          draggingPanel = null;
+          previewMode = null;
+          previewSlot = 0;
+          originState = null;
+          dropped = false;
+          pendingPointer = null;
+          dragFrameScheduled = false;
+          lastAppliedKey = '';
+          hideLayoutOverlay();
+          setDragMode(false);
+          saveLayoutState();
+          clearPanelDraggable();
+        }
+
+        function processDragFrame() {
+          dragFrameScheduled = false;
+          if (!draggingPanel || !pendingPointer) {
+            return;
+          }
+
+          const overlayChoice = detectOverlayChoice(
+            pendingPointer.clientX,
+            pendingPointer.clientY,
+          );
+
+          if (overlayChoice) {
+            previewMode = overlayChoice.mode;
+            previewSlot = overlayChoice.slot;
+          } else {
+            previewMode = previewMode || getActiveLayoutMode() || 'splitLR';
+            previewSlot = detectSlotFromPointer(
+              previewMode,
+              pendingPointer.clientX,
+              pendingPointer.clientY,
+            );
+          }
+
+          const stateKey = `${previewMode}:${previewSlot}`;
+          if (stateKey === lastAppliedKey) {
+            return;
+          }
+          lastAppliedKey = stateKey;
+
+          showLayoutOverlay(previewMode || 'splitLR', previewSlot);
+
+          const baseMap = originState ? originState.slotMap : getSlotMap();
+          const nextMap = createPreviewSlotMap(
+            baseMap,
+            draggingPanel.dataset.panelId,
+            previewSlot,
+            previewMode || 'splitLR',
+          );
+          applyLayoutState(previewMode || 'splitLR', nextMap);
+        }
+
+        getMovablePanels().forEach((panel) => {
+          panel.addEventListener('dragstart', (event) => {
+            if (!panel.classList.contains('drag-ready')) {
+              event.preventDefault();
+              return;
+            }
+
+            draggingPanel = panel;
+            dropped = false;
+            originState = {
+              mode: getActiveLayoutMode(),
+              slotMap: getSlotMap(),
+            };
+            previewMode = originState.mode;
+            previewSlot = Number.parseInt(panel.dataset.slot || '0', 10);
+            panel.classList.add('dragging');
+            panel.classList.add('drag-ghost');
+            setDragMode(true);
+            showLayoutOverlay(previewMode, previewSlot);
+            lastAppliedKey = `${previewMode}:${previewSlot}`;
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData(
+                'text/plain',
+                panel.dataset.panelId || 'panel',
+              );
+            }
+          });
+
+          panel.addEventListener('dragend', () => {
+            if (!dropped) {
+              if (originState) {
+                applyLayoutState(originState.mode, originState.slotMap);
+              }
+              finalizeDrag();
+            }
+          });
+
+          const dragButton = panel.querySelector('.panel-drag-btn');
+          if (!dragButton) return;
+
+          const armDrag = () => {
+            panel.draggable = true;
+            panel.classList.add('drag-ready');
+          };
+
+          const disarmDrag = () => {
+            if (!panel.classList.contains('dragging')) {
+              panel.draggable = false;
+              panel.classList.remove('drag-ready');
+            }
+          };
+
+          dragButton.addEventListener('mousedown', armDrag);
+          dragButton.addEventListener('touchstart', armDrag, { passive: true });
+          dragButton.addEventListener('mouseup', disarmDrag);
+          dragButton.addEventListener('mouseleave', disarmDrag);
+          dragButton.addEventListener('blur', disarmDrag);
+        });
+
+        document.addEventListener('dragover', (event) => {
+          if (!draggingPanel) {
+            return;
+          }
+          event.preventDefault();
+
+          pendingPointer = {
+            clientX: event.clientX,
+            clientY: event.clientY,
+          };
+
+          if (!dragFrameScheduled) {
+            dragFrameScheduled = true;
+            requestAnimationFrame(processDragFrame);
+          }
+        });
+
+        document.addEventListener('drop', (event) => {
+          if (!draggingPanel) {
+            return;
+          }
+          event.preventDefault();
+          dropped = true;
+          saveLayoutState();
+          finalizeDrag();
+        });
+
+        document.addEventListener('mouseup', clearPanelDraggable);
+        document.addEventListener('touchend', clearPanelDraggable);
+        document.addEventListener('mouseup', savePanelSizes);
+        document.addEventListener('touchend', savePanelSizes);
+        document.addEventListener('mouseup', () => {
+          if (draggingPanel) {
+            finalizeDrag();
+          } else {
+            setDragMode(false);
+          }
+        });
+        document.addEventListener('touchend', () => {
+          if (draggingPanel) {
+            finalizeDrag();
+          } else {
+            setDragMode(false);
+          }
+        });
+      }
+
+      function initPanelOrdering() {
+        restoreLayoutState();
+        restorePanelSizes();
+        bindPanelDragButtons();
+      }
+
+      document
+        .getElementById('applyFilterBtn')
+        .addEventListener('click', applyFilters);
+      document
+        .getElementById('resetFilterBtn')
+        .addEventListener('click', resetFilters);
+      document.getElementById('prevPageBtn').addEventListener('click', () => {
+        if (currentPage > 0) loadResources(currentPage - 1);
+      });
+      document.getElementById('nextPageBtn').addEventListener('click', () => {
+        if (currentPage < totalPages - 1) loadResources(currentPage + 1);
+      });
+      document
+        .getElementById('searchInput')
+        .addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            applyFilters();
+          }
+        });
+
+      const analyticsSection = document.getElementById(
+        'managementAnalyticsSection',
+      );
+
+      if (analyticsSection) {
+        document.getElementById('analyticsStartDate').value = todayDateString();
+        document
+          .getElementById('refreshAnalyticsBtn')
+          .addEventListener('click', loadManagementAnalytics);
+      }
+
+      initPanelOrdering();
+
+      loadResources();
+      loadManagementAnalytics();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>审批队列 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>审批队列</h1>
+        <p>
+          当前用户：<strong th:text="${displayName}">Approver</strong> （<span
+            th:text="${username}"
+            >username</span
+          >）
+        </p>
+      </div>
+      <div>
+        <a th:href="@{/dashboard}" class="btn-small">返回首页</a>
+        <form method="post" th:action="@{/logout}" style="display: inline">
+          <button type="submit" class="logout-btn">退出登录</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content-container">
+      <h2>待审批列表</h2>
+      <table id="approvalTable">
+        <thead>
+          <tr>
+            <th>申请ID</th>
+            <th>申请人</th>
+            <th>资源</th>
+            <th>标题</th>
+            <th>时间段</th>
+            <th>触发原因</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </main>
+
+    <script>
+      function fmt(dt) {
+        return new Date(dt).toLocaleString('zh-CN');
+      }
+
+      async function loadPending() {
+        const response = await fetch('/api/approvals/pending');
+        if (!response.ok) {
+          alert('加载审批队列失败');
+          return;
+        }
+
+        const rows = await response.json();
+        const tbody = document.querySelector('#approvalTable tbody');
+        tbody.innerHTML = '';
+
+        if (rows.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" style="text-align:center">暂无待审批记录</td></tr>';
+          return;
+        }
+
+        rows.forEach((item) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.approvalRequestId}</td>
+            <td>${item.requesterDisplayName} (${item.requesterUsername})</td>
+            <td>${item.resourceCode} - ${item.resourceName}</td>
+            <td>${item.bookingTitle}</td>
+            <td>${fmt(item.startTime)} ~ ${fmt(item.endTime)}</td>
+            <td>${item.reason || '-'}</td>
+            <td>
+              <button class="btn-primary" onclick="approve(${item.approvalRequestId})">批准</button>
+              <button class="btn-secondary" onclick="reject(${item.approvalRequestId})">拒绝</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      async function approve(id) {
+        const comment = prompt('审批意见（可选）', '');
+        const response = await fetch(`/api/approvals/${id}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment: comment || null }),
+        });
+
+        if (!response.ok) {
+          alert('审批失败');
+          return;
+        }
+
+        loadPending();
+      }
+
+      async function reject(id) {
+        const comment = prompt('拒绝原因（可选）', '');
+        const response = await fetch(`/api/approvals/${id}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment: comment || null }),
+        });
+
+        if (!response.ok) {
+          alert('拒绝失败');
+          return;
+        }
+
+        loadPending();
+      }
+
+      loadPending();
+    </script>
+  </body>
+</html>

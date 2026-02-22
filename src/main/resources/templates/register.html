@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>注册申请 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-card">
+      <h1>注册申请</h1>
+      <p class="hint">提交后需管理员审批，审批通过后才能登录。</p>
+
+      <form id="registerForm">
+        <label for="username">用户名</label>
+        <input id="username" name="username" type="text" required />
+
+        <label for="displayName">显示名</label>
+        <input id="displayName" name="displayName" type="text" required />
+
+        <label for="email">邮箱</label>
+        <input id="email" name="email" type="email" required />
+
+        <label for="password">密码</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          minlength="8"
+          required
+        />
+
+        <label for="confirmPassword">确认密码</label>
+        <input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          minlength="8"
+          required
+        />
+
+        <label for="requestedRole">申请角色</label>
+        <select id="requestedRole" name="requestedRole" required>
+          <option value="EMPLOYEE">EMPLOYEE</option>
+          <option value="APPROVER">APPROVER</option>
+        </select>
+
+        <button type="submit">提交申请</button>
+      </form>
+
+      <p class="hint" style="margin-top: 10px">
+        已有账号？<a th:href="@{/login}">返回登录</a>
+      </p>
+    </main>
+
+    <script>
+      document
+        .getElementById('registerForm')
+        .addEventListener('submit', async (e) => {
+          e.preventDefault();
+
+          const password = document.getElementById('password').value;
+          const confirmPassword =
+            document.getElementById('confirmPassword').value;
+          if (password !== confirmPassword) {
+            alert('两次输入的密码不一致');
+            return;
+          }
+
+          const payload = {
+            username: document.getElementById('username').value,
+            displayName: document.getElementById('displayName').value,
+            email: document.getElementById('email').value,
+            password,
+            confirmPassword,
+            requestedRole: document.getElementById('requestedRole').value,
+          };
+
+          const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          const text = await response.text();
+          if (response.ok) {
+            alert(text || '注册申请已提交');
+            window.location.href = '/login';
+            return;
+          }
+
+          alert(text || '注册申请失败');
+        });
+    </script>
+  </body>
+</html>

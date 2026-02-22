@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>资源列表 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <span th:text="${displayName}">用户</span>
+        (<span th:text="${username}">username</span>)
+        <span class="role-badge" th:each="role : ${roles}" th:text="${role}"
+          >ROLE</span
+        >
+      </div>
+      <div>
+        <a th:href="@{/dashboard}">返回首页</a> |
+        <a th:href="@{/bookings}">我的预订</a> |
+        <form th:action="@{/logout}" method="post" style="display: inline">
+          <button type="submit" class="logout-btn">退出</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="content-container">
+      <h2>资源列表</h2>
+
+      <div
+        class="filter-section"
+        style="
+          display: grid;
+          grid-template-columns: repeat(6, minmax(120px, 1fr));
+          gap: 10px;
+          align-items: end;
+          margin-bottom: 16px;
+        "
+      >
+        <label>
+          资源类型
+          <select id="typeFilter">
+            <option value="">全部</option>
+            <option value="MEETING_ROOM">会议室</option>
+            <option value="DESK">工位</option>
+            <option value="OTHER">其他</option>
+          </select>
+        </label>
+
+        <label>
+          位置
+          <input id="locationFilter" type="text" placeholder="如: Floor 5" />
+        </label>
+
+        <label>
+          最小容量
+          <input id="minCapacityFilter" type="number" min="1" placeholder="1" />
+        </label>
+
+        <label>
+          最大容量
+          <input
+            id="maxCapacityFilter"
+            type="number"
+            min="1"
+            placeholder="20"
+          />
+        </label>
+
+        <label style="grid-column: span 2">
+          搜索
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="按编号/名称/特性搜索"
+          />
+        </label>
+
+        <div style="display: flex; gap: 8px; grid-column: span 6">
+          <button type="button" id="applyFilterBtn" class="btn-primary">
+            筛选
+          </button>
+          <button type="button" id="resetFilterBtn" class="btn-secondary">
+            重置
+          </button>
+        </div>
+      </div>
+
+      <table id="resourceTable">
+        <thead>
+          <tr>
+            <th>编号</th>
+            <th>名称</th>
+            <th>类型</th>
+            <th>位置</th>
+            <th>容量</th>
+            <th>显示器</th>
+            <th>视频会议</th>
+            <th>特性</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Resources will be loaded via JavaScript -->
+        </tbody>
+      </table>
+
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 16px;
+        "
+      >
+        <span id="pageInfo">第 1 页</span>
+        <div style="display: flex; gap: 8px">
+          <button type="button" id="prevPageBtn" class="btn-secondary">
+            上一页
+          </button>
+          <button type="button" id="nextPageBtn" class="btn-secondary">
+            下一页
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const typeLabels = {
+        MEETING_ROOM: '会议室',
+        DESK: '工位',
+        OTHER: '其他',
+      };
+
+      const pageSize = 10;
+      let currentPage = 0;
+      let totalPages = 1;
+
+      // Load resources on page load
+      async function loadResources(page = 0) {
+        try {
+          const type = document.getElementById('typeFilter').value;
+          const location = document.getElementById('locationFilter').value;
+          const minCapacity =
+            document.getElementById('minCapacityFilter').value;
+          const maxCapacity =
+            document.getElementById('maxCapacityFilter').value;
+          const search = document.getElementById('searchInput').value;
+
+          const params = new URLSearchParams();
+          params.set('page', page);
+          params.set('size', pageSize);
+          if (type) params.set('type', type);
+          if (location) params.set('location', location);
+          if (minCapacity) params.set('minCapacity', minCapacity);
+          if (maxCapacity) params.set('maxCapacity', maxCapacity);
+          if (search) params.set('search', search);
+
+          const response = await fetch(`/api/resources?${params.toString()}`);
+          if (response.ok) {
+            const data = await response.json();
+            currentPage = data.number;
+            totalPages = data.totalPages;
+            displayResources(data.content || []);
+            updatePagination();
+          } else {
+            alert('加载资源失败');
+          }
+        } catch (error) {
+          console.error('Error loading resources:', error);
+          alert('加载资源时发生错误');
+        }
+      }
+
+      function updatePagination() {
+        const info = document.getElementById('pageInfo');
+        const prevBtn = document.getElementById('prevPageBtn');
+        const nextBtn = document.getElementById('nextPageBtn');
+
+        const displayTotalPages = totalPages === 0 ? 1 : totalPages;
+        info.textContent = `第 ${currentPage + 1} 页 / 共 ${displayTotalPages} 页`;
+        prevBtn.disabled = currentPage <= 0;
+        nextBtn.disabled = currentPage >= totalPages - 1 || totalPages === 0;
+      }
+
+      // Display resources in table
+      function displayResources(resources) {
+        const tbody = document.querySelector('#resourceTable tbody');
+        tbody.innerHTML = '';
+
+        if (resources.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="9" style="text-align: center;">暂无资源</td></tr>';
+          return;
+        }
+
+        resources.forEach((resource) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+                <td>${resource.code}</td>
+                <td>${resource.name}</td>
+                <td>${typeLabels[resource.type] || resource.type}</td>
+                <td>${resource.location || '-'}</td>
+                <td>${resource.capacity || '-'}</td>
+                <td>${resource.hasDisplay ? '是' : '否'}</td>
+                <td>${resource.hasVideoConference ? '是' : '否'}</td>
+                <td>${resource.features || '-'}</td>
+                <td>
+                    <a href="/bookings/create?resourceId=${resource.id}" class="btn-small">预订</a>
+                </td>
+            `;
+          tbody.appendChild(row);
+        });
+      }
+
+      function applyFilters() {
+        loadResources(0);
+      }
+
+      function resetFilters() {
+        document.getElementById('typeFilter').value = '';
+        document.getElementById('locationFilter').value = '';
+        document.getElementById('minCapacityFilter').value = '';
+        document.getElementById('maxCapacityFilter').value = '';
+        document.getElementById('searchInput').value = '';
+        loadResources(0);
+      }
+
+      // Event listeners
+      document
+        .getElementById('applyFilterBtn')
+        .addEventListener('click', applyFilters);
+      document
+        .getElementById('resetFilterBtn')
+        .addEventListener('click', resetFilters);
+      document.getElementById('prevPageBtn').addEventListener('click', () => {
+        if (currentPage > 0) loadResources(currentPage - 1);
+      });
+      document.getElementById('nextPageBtn').addEventListener('click', () => {
+        if (currentPage < totalPages - 1) loadResources(currentPage + 1);
+      });
+      document
+        .getElementById('searchInput')
+        .addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            applyFilters();
+          }
+        });
+
+      // Load resources on page load
+      loadResources();
+    </script>
+  </body>
+</html>

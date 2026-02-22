@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的预订 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <style>
+      .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .status-PENDING {
+        background-color: var(--warn-bg);
+        color: var(--warn-text);
+      }
+      .status-CONFIRMED {
+        background-color: var(--ok-bg);
+        color: var(--ok-text);
+      }
+      .status-CANCELLED {
+        background-color: #2d2424;
+        color: #d4aaaa;
+      }
+      .status-COMPLETED {
+        background-color: #222d2d;
+        color: #b2d8d1;
+      }
+      .btn-cancel {
+        background-color: var(--danger);
+        color: #fff;
+        padding: 4px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .btn-cancel:hover {
+        background-color: var(--danger-dark);
+      }
+      .btn-cancel:disabled {
+        background-color: #4a4337;
+        cursor: not-allowed;
+      }
+      .btn-edit {
+        background: linear-gradient(
+          180deg,
+          var(--accent-gold-strong) 0%,
+          var(--accent-gold) 100%
+        );
+        color: #17130a;
+        padding: 4px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 6px;
+      }
+      .btn-edit:hover {
+        filter: brightness(1.05);
+      }
+      .btn-edit:disabled {
+        background-color: #4a4337;
+        color: #b7aa8f;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <span th:text="${displayName}">用户</span>
+        (<span th:text="${username}">username</span>)
+        <span class="role-badge" th:each="role : ${roles}" th:text="${role}"
+          >ROLE</span
+        >
+      </div>
+      <div>
+        <a th:href="@{/dashboard}">返回首页</a> |
+        <a th:href="@{/resources}">资源列表</a> |
+        <a th:href="@{/bookings/create}">创建预订</a> |
+        <form th:action="@{/logout}" method="post" style="display: inline">
+          <button type="submit" class="logout-btn">退出</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="content-container">
+      <h2>我的预订</h2>
+
+      <div style="margin-bottom: 15px">
+        <a th:href="@{/bookings/create}" class="btn-primary">创建新预订</a>
+      </div>
+
+      <table id="bookingsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>资源</th>
+            <th>标题</th>
+            <th>开始时间</th>
+            <th>结束时间</th>
+            <th>状态</th>
+            <th>需审批</th>
+            <th>备注/讯息</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Bookings will be loaded via JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      const statusLabels = {
+        PENDING: '待处理',
+        CONFIRMED: '已确认',
+        CANCELLED: '已取消',
+        COMPLETED: '已完成',
+      };
+
+      function toDisplayStatus(rawStatus, endTime) {
+        if (rawStatus === 'PENDING' || rawStatus === 'PENDING_APPROVAL') {
+          return 'PENDING';
+        }
+        if (rawStatus === 'APPROVED' || rawStatus === 'CONFIRMED') {
+          return new Date(endTime).getTime() < Date.now()
+            ? 'COMPLETED'
+            : 'CONFIRMED';
+        }
+        if (rawStatus === 'REJECTED' || rawStatus === 'CANCELLED') {
+          return 'CANCELLED';
+        }
+        if (rawStatus === 'COMPLETED') {
+          return 'COMPLETED';
+        }
+        return rawStatus;
+      }
+
+      // Load bookings
+      async function loadBookings() {
+        try {
+          const response = await fetch('/api/bookings');
+          if (response.ok) {
+            const bookings = await response.json();
+            displayBookings(bookings);
+          } else {
+            alert('加载预订失败');
+          }
+        } catch (error) {
+          console.error('Error loading bookings:', error);
+          alert('加载预订时发生错误');
+        }
+      }
+
+      // Display bookings in table
+      function displayBookings(bookings) {
+        const tbody = document.querySelector('#bookingsTable tbody');
+        tbody.innerHTML = '';
+
+        if (bookings.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="9" style="text-align: center;">暂无预订</td></tr>';
+          return;
+        }
+
+        bookings.forEach((booking) => {
+          const row = document.createElement('tr');
+          const startTime = new Date(booking.startTime).toLocaleString('zh-CN');
+          const endTime = new Date(booking.endTime).toLocaleString('zh-CN');
+          const isFuture = new Date(booking.startTime).getTime() > Date.now();
+          const displayStatus = toDisplayStatus(
+            booking.status,
+            booking.endTime,
+          );
+
+          const canCancel =
+            isFuture &&
+            (displayStatus === 'PENDING' || displayStatus === 'CONFIRMED');
+          const canEdit = canCancel;
+
+          const noteText =
+            booking.notes && booking.notes.trim() ? booking.notes.trim() : '';
+          const rejectionText =
+            booking.rejectionComment && booking.rejectionComment.trim()
+              ? booking.rejectionComment.trim()
+              : '';
+          const message =
+            noteText || rejectionText
+              ? [noteText, rejectionText ? `拒绝原因: ${rejectionText}` : '']
+                  .filter(Boolean)
+                  .join('；')
+              : '-';
+
+          const editBtn = canEdit
+            ? `<button class="btn-edit" onclick="editBooking(${booking.id})">修改</button>`
+            : `<button class="btn-edit" disabled>不可修改</button>`;
+          const cancelBtn = canCancel
+            ? `<button class="btn-cancel" onclick="cancelBooking(${booking.id})">取消</button>`
+            : `<button class="btn-cancel" disabled>不可取消</button>`;
+
+          row.innerHTML = `
+                <td>${booking.id}</td>
+                <td>${booking.resourceCode} - ${booking.resourceName}</td>
+                <td>${booking.title}</td>
+                <td>${startTime}</td>
+                <td>${endTime}</td>
+                <td><span class="status-badge status-${displayStatus}">${statusLabels[displayStatus] || displayStatus}</span></td>
+                <td>${booking.requiresApproval ? '是' : '否'}</td>
+                <td>${message}</td>
+                <td>${editBtn}${cancelBtn}</td>
+            `;
+          tbody.appendChild(row);
+        });
+      }
+
+      async function editBooking(bookingId) {
+        try {
+          const detailResponse = await fetch(`/api/bookings/${bookingId}`);
+          if (!detailResponse.ok) {
+            const error = await detailResponse.text();
+            alert('加载预订详情失败: ' + error);
+            return;
+          }
+          const booking = await detailResponse.json();
+
+          const title = prompt('请输入新标题：', booking.title || '');
+          if (title === null || !title.trim()) {
+            return;
+          }
+
+          const startDefault = booking.startTime
+            ? booking.startTime.substring(0, 16)
+            : '';
+          const endDefault = booking.endTime
+            ? booking.endTime.substring(0, 16)
+            : '';
+          const startInput = prompt(
+            '请输入开始时间（YYYY-MM-DDTHH:mm）：',
+            startDefault,
+          );
+          if (!startInput) return;
+          const endInput = prompt(
+            '请输入结束时间（YYYY-MM-DDTHH:mm）：',
+            endDefault,
+          );
+          if (!endInput) return;
+
+          const notesInput = prompt(
+            '请输入备注（可为空）：',
+            booking.notes || '',
+          );
+          if (notesInput === null) return;
+
+          const updateResponse = await fetch(`/api/bookings/${bookingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              resourceId: booking.resourceId,
+              title: title.trim(),
+              startTime: new Date(startInput).toISOString(),
+              endTime: new Date(endInput).toISOString(),
+              notes: notesInput,
+            }),
+          });
+
+          if (updateResponse.ok) {
+            alert('预订修改成功');
+            loadBookings();
+          } else {
+            const error = await updateResponse.text();
+            alert('修改失败: ' + error);
+          }
+        } catch (error) {
+          console.error('Error editing booking:', error);
+          alert('修改预订时发生错误');
+        }
+      }
+
+      // Cancel booking
+      async function cancelBooking(bookingId) {
+        if (!confirm('确定要取消这个预订吗?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+            method: 'POST',
+          });
+
+          if (response.ok) {
+            alert('预订已取消');
+            loadBookings(); // Reload bookings
+          } else {
+            const error = await response.text();
+            alert('取消失败: ' + error);
+          }
+        } catch (error) {
+          console.error('Error cancelling booking:', error);
+          alert('取消预订时发生错误');
+        }
+      }
+
+      // Load bookings on page load
+      loadBookings();
+    </script>
+  </body>
+</html>

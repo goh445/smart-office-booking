@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Office Booking - 登录</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-card">
+      <h1>Smart Office Booking</h1>
+      <p class="hint">
+        请使用种子账号登录：admin / approver / employee（密码均为 Password123!）
+      </p>
+
+      <div class="alert error" th:if="${param.error}">
+        登录失败，请检查用户名或密码
+      </div>
+      <div class="alert error" th:if="${param.sessionExpired}">
+        会话已失效，请重新登录
+      </div>
+      <div class="alert success" th:if="${param.logout}">已安全退出</div>
+
+      <form method="post" th:action="@{/login}">
+        <label for="username">用户名</label>
+        <input id="username" name="username" type="text" required />
+
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password" required />
+
+        <button type="submit">登录</button>
+      </form>
+
+      <p class="hint" style="margin-top: 10px">
+        还没有账号？<a th:href="@{/register}">提交注册申请</a>
+      </p>
+    </main>
+  </body>
+</html>

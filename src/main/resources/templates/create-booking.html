@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>创建预订 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+    <style>
+      .form-group {
+        margin-bottom: 15px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+      .btn-primary {
+        background: linear-gradient(
+          180deg,
+          var(--accent-gold-strong) 0%,
+          var(--accent-gold) 100%
+        );
+        color: #17130a;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .btn-primary:hover {
+        filter: brightness(1.05);
+      }
+      .availability-check {
+        margin: 15px 0;
+        padding: 10px;
+        border-radius: 4px;
+      }
+      .availability-ok {
+        background-color: var(--ok-bg);
+        color: var(--ok-text);
+      }
+      .availability-conflict {
+        background-color: #351f1f;
+        color: #e7b2b2;
+      }
+      .conflict-list {
+        margin-top: 10px;
+        font-size: 14px;
+      }
+      .daily-occupancy {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background-color: var(--bg-soft);
+      }
+      .daily-occupancy ul {
+        margin: 8px 0 0 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <span th:text="${displayName}">用户</span>
+        (<span th:text="${username}">username</span>)
+        <span class="role-badge" th:each="role : ${roles}" th:text="${role}"
+          >ROLE</span
+        >
+      </div>
+      <div>
+        <a th:href="@{/dashboard}">返回首页</a> |
+        <a th:href="@{/resources}">资源列表</a> |
+        <a th:href="@{/bookings}">我的预订</a> |
+        <form th:action="@{/logout}" method="post" style="display: inline">
+          <button type="submit" class="logout-btn">退出</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="content-container">
+      <h2>创建预订</h2>
+
+      <form id="bookingForm">
+        <div class="form-group">
+          <label for="resourceSelect">资源 *</label>
+          <select id="resourceSelect" name="resourceId" required>
+            <option value="">请选择资源</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="title">标题 *</label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            required
+            placeholder="例如: 团队会议"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="startTime">开始时间 *</label>
+          <input
+            type="datetime-local"
+            id="startTime"
+            name="startTime"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="endTime">结束时间 *</label>
+          <input type="datetime-local" id="endTime" name="endTime" required />
+        </div>
+
+        <div class="form-group">
+          <label for="occupancyDate">当前资源占用（按日期查看）</label>
+          <input type="date" id="occupancyDate" name="occupancyDate" />
+          <div id="dailyOccupancyResult" class="daily-occupancy">
+            请选择资源和日期查看当前预订情况
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="notes">备注</label>
+          <textarea
+            id="notes"
+            name="notes"
+            placeholder="可选备注信息"
+          ></textarea>
+        </div>
+
+        <div id="availabilityResult" style="display: none"></div>
+
+        <button
+          type="button"
+          onclick="checkAvailability()"
+          class="btn-secondary"
+        >
+          检查可用性
+        </button>
+        <button type="submit" class="btn-primary">提交预订</button>
+      </form>
+    </div>
+
+    <script>
+      let resources = [];
+
+      // Load resources on page load
+      async function loadResources() {
+        try {
+          const response = await fetch('/api/resources?page=0&size=100');
+          if (response.ok) {
+            const payload = await response.json();
+            resources = Array.isArray(payload)
+              ? payload
+              : payload.content || [];
+            const select = document.getElementById('resourceSelect');
+            resources.forEach((resource) => {
+              const option = document.createElement('option');
+              option.value = resource.id;
+              option.textContent = `${resource.code} - ${resource.name} (${resource.location || ''})`;
+              select.appendChild(option);
+            });
+
+            // Pre-select if resourceId in query params
+            const urlParams = new URLSearchParams(window.location.search);
+            const resourceId = urlParams.get('resourceId');
+            if (resourceId) {
+              select.value = resourceId;
+            }
+          }
+        } catch (error) {
+          console.error('Error loading resources:', error);
+        }
+      }
+
+      // Check availability
+      async function checkAvailability() {
+        const resourceId = document.getElementById('resourceSelect').value;
+        const startTime = document.getElementById('startTime').value;
+        const endTime = document.getElementById('endTime').value;
+
+        if (!resourceId || !startTime || !endTime) {
+          alert('请填写资源、开始时间和结束时间');
+          return;
+        }
+
+        const startISO = new Date(startTime).toISOString();
+        const endISO = new Date(endTime).toISOString();
+
+        try {
+          const response = await fetch(
+            `/api/resources/${resourceId}/availability?start=${startISO}&end=${endISO}`,
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            displayAvailability(data);
+          } else {
+            alert('检查可用性失败');
+          }
+        } catch (error) {
+          console.error('Error checking availability:', error);
+          alert('检查可用性时发生错误');
+        }
+      }
+
+      async function loadDailyOccupancy() {
+        const resourceId = document.getElementById('resourceSelect').value;
+        const date = document.getElementById('occupancyDate').value;
+        const resultDiv = document.getElementById('dailyOccupancyResult');
+
+        if (!resourceId || !date) {
+          resultDiv.textContent = '请选择资源和日期查看当前预订情况';
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `/api/resources/${resourceId}/booked-slots?date=${date}`,
+          );
+
+          if (!response.ok) {
+            resultDiv.textContent = '加载当日占用情况失败';
+            return;
+          }
+
+          const bookings = await response.json();
+          if (!bookings || bookings.length === 0) {
+            resultDiv.textContent = '该资源在所选日期暂无预订';
+            return;
+          }
+
+          let html = '该资源在所选日期已预订：<ul>';
+          bookings.forEach((booking) => {
+            const start = new Date(booking.startTime).toLocaleString('zh-CN');
+            const end = new Date(booking.endTime).toLocaleString('zh-CN');
+            const requester = booking.requesterDisplayName || '未知用户';
+            html += `<li>${requester}：${start} - ${end}</li>`;
+          });
+          html += '</ul>';
+          resultDiv.innerHTML = html;
+        } catch (error) {
+          console.error('Error loading daily occupancy:', error);
+          resultDiv.textContent = '加载当日占用情况时发生错误';
+        }
+      }
+
+      // Display availability result
+      function displayAvailability(data) {
+        const resultDiv = document.getElementById('availabilityResult');
+        resultDiv.style.display = 'block';
+
+        if (data.available) {
+          resultDiv.className = 'availability-check availability-ok';
+          resultDiv.innerHTML = '✓ 该时间段可用';
+        } else {
+          resultDiv.className = 'availability-check availability-conflict';
+          let html = '✗ 该时间段有冲突';
+          if (data.overlappingBookings && data.overlappingBookings.length > 0) {
+            html += '<div class="conflict-list">冲突预订:<ul>';
+            data.overlappingBookings.forEach((booking) => {
+              const start = new Date(booking.startTime).toLocaleString('zh-CN');
+              const end = new Date(booking.endTime).toLocaleString('zh-CN');
+              const requester = booking.requesterDisplayName || '未知用户';
+              html += `<li>${booking.title} - ${requester} 预订 (${start} - ${end})</li>`;
+            });
+            html += '</ul></div>';
+          }
+          resultDiv.innerHTML = html;
+        }
+      }
+
+      // Handle form submission
+      document
+        .getElementById('bookingForm')
+        .addEventListener('submit', async (e) => {
+          e.preventDefault();
+
+          const formData = {
+            resourceId: parseInt(
+              document.getElementById('resourceSelect').value,
+            ),
+            title: document.getElementById('title').value,
+            startTime: new Date(
+              document.getElementById('startTime').value,
+            ).toISOString(),
+            endTime: new Date(
+              document.getElementById('endTime').value,
+            ).toISOString(),
+            notes: document.getElementById('notes').value,
+          };
+
+          try {
+            const response = await fetch('/api/bookings', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(formData),
+            });
+
+            if (response.ok) {
+              const booking = await response.json();
+              alert(
+                '预订创建成功！' +
+                  (booking.requiresApproval ? ' 需要审批。' : ' 已自动批准。'),
+              );
+              window.location.href = '/bookings';
+            } else {
+              const error = await response.text();
+              alert('预订失败: ' + error);
+            }
+          } catch (error) {
+            console.error('Error creating booking:', error);
+            alert('创建预订时发生错误');
+          }
+        });
+
+      // Load resources on page load
+      document
+        .getElementById('resourceSelect')
+        .addEventListener('change', () => {
+          loadDailyOccupancy();
+        });
+
+      document
+        .getElementById('occupancyDate')
+        .addEventListener('change', () => {
+          loadDailyOccupancy();
+        });
+
+      document
+        .getElementById('startTime')
+        .addEventListener('change', (event) => {
+          if (!event.target.value) {
+            return;
+          }
+          const dateValue = event.target.value.substring(0, 10);
+          const dateInput = document.getElementById('occupancyDate');
+          dateInput.value = dateValue;
+          loadDailyOccupancy();
+        });
+
+      document.getElementById('occupancyDate').value = new Date()
+        .toISOString()
+        .split('T')[0];
+
+      loadResources();
+      loadDailyOccupancy();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 助手 - Smart Office Booking</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <span th:text="${displayName}">用户</span>
+        (<span th:text="${username}">username</span>)
+      </div>
+      <div>
+        <a th:href="@{/dashboard}">返回首页</a>
+      </div>
+    </div>
+
+    <div class="content-container">
+      <h2>AI 助手（Phase 5）</h2>
+      <p class="hint ai-subtitle">
+        支持自然语言预约、智能推荐、智能助理问答。AI 生成时会显示输入中动画，返回后逐字快速展示内容。
+      </p>
+
+      <div class="ai-mode-grid">
+        <button class="ai-mode-card" type="button" data-mode="parse-booking" data-sample="帮我订一个明天下午2点有显示器的位置，预计用2小时。">
+          <strong>自然语言预约</strong>
+          <span>例如：帮我订一个明天下午 2 点有显示器的位置</span>
+        </button>
+        <button class="ai-mode-card" type="button" data-mode="recommend" data-sample="我平时喜欢在5楼靠窗办公，帮我推荐明天可用位置。">
+          <strong>智能推荐</strong>
+          <span>例如：你平时喜欢 5 楼靠窗，是否为你预留 501 工位</span>
+        </button>
+        <button class="ai-mode-card" type="button" data-mode="ask" data-sample="如何连接3楼会议室的投屏设备？">
+          <strong>智能助理</strong>
+          <span>例如：办公室几点关门？如何连接 3 楼会议室投屏？</span>
+        </button>
+      </div>
+
+      <div class="filter-section ai-form">
+        <p id="modeHint" class="hint"></p>
+
+        <label class="ai-toggle" id="autoSubmitWrap">
+          <input id="autoSubmit" type="checkbox" checked />
+          自动提交预订（关闭后：先预览，再手动确认提交）
+        </label>
+
+        <div class="chat-panel">
+          <div id="chatThread" class="chat-thread"></div>
+
+          <div class="chat-composer">
+            <textarea
+              id="prompt"
+              rows="2"
+              placeholder="请输入你的需求"
+            ></textarea>
+
+            <div class="ai-actions">
+              <button class="btn-primary" type="button" id="submitBtn">发送</button>
+              <button class="btn-primary" type="button" id="confirmBtn" style="display: none">确认提交预订</button>
+              <button class="btn-secondary" type="button" id="clearBtn">清空</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      const promptEl = document.getElementById('prompt');
+      const chatThreadEl = document.getElementById('chatThread');
+      const modeHintEl = document.getElementById('modeHint');
+      const submitBtn = document.getElementById('submitBtn');
+      const confirmBtn = document.getElementById('confirmBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const autoSubmitEl = document.getElementById('autoSubmit');
+      const autoSubmitWrap = document.getElementById('autoSubmitWrap');
+      const modeCards = document.querySelectorAll('.ai-mode-card');
+      let currentMode = 'parse-booking';
+      let pendingBookingDraft = null;
+      let typingBubbleRow = null;
+
+      const modeConfig = {
+        'parse-booking': {
+          hint: '直接描述预约需求，AI 会解析时间、资源类型与关键信息，并给出可执行建议。',
+          placeholder:
+            '例如：帮我订一个明天下午2点有显示器的位置，预计用2小时，用于产品讨论。',
+        },
+        recommend: {
+          hint: '告诉 AI 你的偏好，AI 会结合习惯场景给出推荐话术和备选方案。',
+          placeholder:
+            '例如：我常在5楼靠窗办公，明天上午有什么安静且有显示器的位置推荐？',
+        },
+        ask: {
+          hint: '可咨询办公规则、设备使用、预约审批流程等常见问题。',
+          placeholder:
+            '例如：办公室几点关门？如何连接3楼会议室的投屏设备？',
+        },
+      };
+
+      function setMode(mode) {
+        currentMode = mode;
+        modeHintEl.textContent = modeConfig[mode].hint;
+        promptEl.placeholder = modeConfig[mode].placeholder;
+        const selectedCard = [...modeCards].find((card) => card.dataset.mode === mode);
+        promptEl.value = selectedCard?.dataset.sample || '';
+        pendingBookingDraft = null;
+        confirmBtn.style.display = 'none';
+        chatThreadEl.innerHTML = '';
+        appendMessage(
+          'ai',
+          `已切换到${selectedCard?.querySelector('strong')?.textContent || '当前模式'}。${modeConfig[mode].hint}`
+        );
+        autoSubmitWrap.style.display = mode === 'parse-booking' ? 'block' : 'none';
+        modeCards.forEach((card) => {
+          const active = card.dataset.mode === mode;
+          card.classList.toggle('active', active);
+        });
+      }
+
+      modeCards.forEach((card) => {
+        card.addEventListener('click', () => {
+          const mode = card.dataset.mode;
+          setMode(mode);
+          promptEl.focus();
+        });
+      });
+
+      clearBtn.addEventListener('click', () => {
+        promptEl.value = '';
+        pendingBookingDraft = null;
+        confirmBtn.style.display = 'none';
+        chatThreadEl.innerHTML = '';
+        appendMessage('ai', '会话已清空，你可以继续提问。');
+        promptEl.focus();
+      });
+
+      function setLoading(loading) {
+        submitBtn.disabled = loading;
+        confirmBtn.disabled = loading;
+        promptEl.disabled = loading;
+        clearBtn.disabled = loading;
+        autoSubmitEl.disabled = loading;
+        if (loading) {
+          showTypingBubble();
+        } else {
+          hideTypingBubble();
+        }
+      }
+
+      function scrollChatToBottom() {
+        chatThreadEl.scrollTop = chatThreadEl.scrollHeight;
+      }
+
+      function appendMessage(role, text) {
+        const row = document.createElement('div');
+        row.className = `chat-row ${role}`;
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble ${role}`;
+        bubble.textContent = text;
+        row.appendChild(bubble);
+        chatThreadEl.appendChild(row);
+        scrollChatToBottom();
+        return bubble;
+      }
+
+      function showTypingBubble() {
+        if (typingBubbleRow) {
+          return;
+        }
+        const row = document.createElement('div');
+        row.className = 'chat-row ai';
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble ai typing';
+        bubble.innerHTML =
+          '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+        row.appendChild(bubble);
+        chatThreadEl.appendChild(row);
+        typingBubbleRow = row;
+        scrollChatToBottom();
+      }
+
+      function hideTypingBubble() {
+        if (!typingBubbleRow) {
+          return;
+        }
+        typingBubbleRow.remove();
+        typingBubbleRow = null;
+      }
+
+      async function typewriterAiMessage(text) {
+        hideTypingBubble();
+        const bubble = appendMessage('ai', '');
+        const chunks = text.split('');
+        for (let i = 0; i < chunks.length; i += 1) {
+          bubble.textContent += chunks[i];
+          if (i % 2 === 0) {
+            scrollChatToBottom();
+            await new Promise((resolve) => setTimeout(resolve, 8));
+          }
+        }
+        scrollChatToBottom();
+      }
+
+      submitBtn.addEventListener('click', async () => {
+        const type = currentMode;
+        const prompt = promptEl.value.trim();
+        if (!prompt) {
+          alert('请输入内容');
+          return;
+        }
+
+        appendMessage('user', prompt);
+
+        setLoading(true);
+
+        try {
+          let endpoint = `/api/ai/${type}`;
+          if (type === 'parse-booking') {
+            endpoint = autoSubmitEl.checked ? '/api/ai/parse-and-book' : '/api/ai/parse-preview';
+          }
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+
+          const text = await response.text();
+          if (!response.ok) {
+            appendMessage('ai', `调用失败: ${text}`);
+            return;
+          }
+
+          const data = JSON.parse(text);
+          await typewriterAiMessage(data.answer || '');
+
+          if (type === 'parse-booking' && autoSubmitEl.checked && data.bookingId) {
+            appendMessage(
+              'ai',
+              `预订已提交：#${data.bookingId} | ${data.resourceCode} ${data.resourceName} | ${data.startTime} - ${data.endTime} | 状态：${data.status}`
+            );
+          }
+
+          if (type === 'parse-booking' && !autoSubmitEl.checked) {
+            pendingBookingDraft = {
+              resourceId: data.resourceId,
+              title: data.title,
+              startTime: data.startTime,
+              endTime: data.endTime,
+              notes: data.notes,
+              resourceCode: data.resourceCode,
+              resourceName: data.resourceName,
+            };
+            confirmBtn.style.display = 'inline-block';
+            appendMessage(
+              'ai',
+              `预览完成：${data.resourceCode} ${data.resourceName} | ${data.startTime} - ${data.endTime}，请点击“确认提交预订”。`
+            );
+          }
+        } catch (error) {
+          appendMessage('ai', `调用失败: ${error.message || '网络异常'}`);
+        } finally {
+          setTimeout(() => {
+            setLoading(false);
+          }, 200);
+        }
+      });
+
+      confirmBtn.addEventListener('click', async () => {
+        if (!pendingBookingDraft) {
+          alert('请先执行解析预览');
+          return;
+        }
+
+        setLoading(true);
+        try {
+          const response = await fetch('/api/ai/submit-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              resourceId: pendingBookingDraft.resourceId,
+              title: pendingBookingDraft.title,
+              startTime: pendingBookingDraft.startTime,
+              endTime: pendingBookingDraft.endTime,
+              notes: pendingBookingDraft.notes,
+            }),
+          });
+
+          const text = await response.text();
+          if (!response.ok) {
+            appendMessage('ai', `调用失败: ${text}`);
+            return;
+          }
+
+          const data = JSON.parse(text);
+          await typewriterAiMessage(data.answer || '');
+          appendMessage(
+            'ai',
+            `预订已提交：#${data.bookingId} | ${data.resourceCode} ${data.resourceName} | ${data.startTime} - ${data.endTime} | 状态：${data.status}`
+          );
+          pendingBookingDraft = null;
+          confirmBtn.style.display = 'none';
+        } catch (error) {
+          appendMessage('ai', `调用失败: ${error.message || '网络异常'}`);
+        } finally {
+          setTimeout(() => {
+            setLoading(false);
+          }, 200);
+        }
+      });
+
+      setMode('parse-booking');
+    </script>
+  </body>
+</html>

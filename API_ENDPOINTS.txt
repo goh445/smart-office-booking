@@ -1,0 +1,109 @@
+Smart Office Booking - API Endpoints
+
+Base URL: http://localhost:8080
+Auth: Session-based (Spring Security)
+Content-Type: application/json
+
+[Auth]
+- POST /api/auth/login
+  Request: {"username": "string", "password": "string"}
+  Response: AuthResponse
+
+- POST /api/auth/logout
+  Request: none
+  Response: AuthResponse
+
+- GET /api/me
+  Request: none
+  Response: UserProfileResponse
+
+[Registration]
+- POST /api/register
+  Request: RegisterUserRequest
+  Response: "注册申请已提交，等待管理员审批"
+
+[Admin Registration Review]
+- GET /api/admin/registrations/pending
+  Request: none
+  Response: List<UserRegistrationRequestResponse>
+
+- POST /api/admin/registrations/{id}/approve
+  Request: RegistrationReviewRequest (optional)
+  Response: UserRegistrationRequestResponse
+
+- POST /api/admin/registrations/{id}/reject
+  Request: RegistrationReviewRequest (optional)
+  Response: UserRegistrationRequestResponse
+
+[Resources]
+- GET /api/resources?type=&location=&minCapacity=&maxCapacity=&search=&page=0&size=10
+  Request: query params optional
+  Response: Page<ResourceResponse>
+
+- GET /api/resources/{id}
+  Request: none
+  Response: ResourceResponse
+
+- GET /api/resources/{id}/availability?start=ISO_DATE_TIME&end=ISO_DATE_TIME
+  Request: query params required
+  Response: AvailabilityResponse
+
+[Bookings]
+- POST /api/bookings
+  Request: CreateBookingRequest
+  Response: BookingResponse (201 Created)
+
+- GET /api/bookings
+  Request: none
+  Response: List<BookingResponse>
+
+- GET /api/bookings/{id}
+  Request: none
+  Response: BookingResponse
+
+- POST /api/bookings/{id}/cancel
+  Request: none
+  Response: BookingResponse
+
+[Approvals]
+- GET /api/approvals/pending
+  Request: none
+  Response: List<ApprovalQueueItemResponse>
+
+- POST /api/approvals/{id}/approve
+  Request: ApprovalDecisionRequest (optional)
+  Response: ApprovalQueueItemResponse
+
+- POST /api/approvals/{id}/reject
+  Request: ApprovalDecisionRequest (optional)
+  Response: ApprovalQueueItemResponse
+
+[AI]
+- POST /api/ai/parse-booking
+  Request: AiPromptRequest {"prompt": "string"}
+  Response: AiResponse
+
+- POST /api/ai/recommend
+  Request: AiPromptRequest
+  Response: AiResponse
+
+- POST /api/ai/ask
+  Request: AiPromptRequest
+  Response: AiResponse
+
+- POST /api/ai/parse-and-book
+  Request: AiPromptRequest
+  Response: AiBookingActionResponse
+
+- POST /api/ai/parse-preview
+  Request: AiPromptRequest
+  Response: AiBookingPreviewResponse
+
+- POST /api/ai/submit-booking
+  Request: AiBookingSubmitRequest
+  Response: AiBookingActionResponse
+
+[Error Handling]
+- IllegalArgumentException -> 400 text body
+- IllegalStateException -> 400 text body
+- Unexpected Exception -> 500 JSON {"error": "message"}
