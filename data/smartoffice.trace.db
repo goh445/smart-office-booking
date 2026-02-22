@@ -903,3 +903,12 @@ insert into bookings (created_at,end_time,notes,requester_id,requires_approval,r
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
+2026-02-22 12:12:40.565124+08:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "[*]USER_REGISTRATION_REQUESTS"; expected "UPDATE"; SQL statement:
+USER_REGISTRATION_REQUESTS [42001-232]
+2026-02-22 12:12:51.133322+08:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "[*]USER_REGISTRATION_REQUESTS"; expected "UPDATE"; SQL statement:
+USER_REGISTRATION_REQUESTS [42001-232]
+2026-02-22 12:13:19.990626+08:00 jdbc[13]: exception
+org.h2.jdbc.JdbcSQLSyntaxErrorException: Syntax error in SQL statement "select from [*]* USER_REGISTRATION_REQUESTS"; expected "identifier"; SQL statement:
+select from * USER_REGISTRATION_REQUESTS [42001-232]
